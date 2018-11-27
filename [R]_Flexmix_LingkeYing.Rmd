@@ -9,14 +9,14 @@ output:
 
 In this section we will use the package flexmix to fit finite mixtures of regression models. flexmix implements a general framework for fitting discrete mixtures of regression models in the R statistical computing environment. 
 
-1. General information
+General information
 ```{r general, message = FALSE}
 library(flexmix)
 library(dplyr)
 # m1 - S4 object, use @ to retrieve the attributes
 ```
 
-2. Download Wine dataset from the UCI Machine Learning Repository and save the dataset to the current working directory
+We first download Wine dataset from the UCI Machine Learning Repository and save the dataset to the current working directory.
 
 ```{r dataset}
 wine <- read.delim("~/wine.txt", sep = ",")
@@ -26,7 +26,8 @@ a = c("Class", "Alcohol", "Malic_acid", "Ash", "Alcalinity_of_ash", "Magnesium",
 names(wine) <- t(a)
 ```
 
-3. Pattern of the selected variables (density plot of response “Color_intensity", predictor “Total_phenols", and histogram of the ground truth class “Class”)
+Then we explore the patterns of variables. 
+We plot below the density plot of response “Color_intensity", the density plot of predictor “Total_phenols", and the histogram of the ground truth class “Class”).
 
 ```{r pattern}
 # - density plot of response “Color_intensity”
@@ -39,38 +40,36 @@ plot(d_phenol, main="Density of Total_phenols")
 h_class <- hist(wine$Class)
 ```
 
-4. Set initial values for EM iterations
+We want to set the initial values for EM iterations.
 
-5. Results of model fitting
+Results of model fitting are shown below:
 ```{r results}
 m1 = flexmix(Color_intensity ~ Total_phenols, data = wine, k = 3)
 print(summary(m1))
 print(parameters(m1))
 ```
-6. Clustering
-````{r cluster}
+6. We then did clustering and classification:
+```{r cluster}
 Cluster = m1@cluster
-```
-
-7. Classification
-```{r classification, message = FALSE}
 post = m1@posterior$scaled
-assign_class = function(x){
-  if(x == 2){return(1)}
-  if(x == 3){return(2)}
-  if(x == 1){return(3)}
+
+for (i in 1:177){
+  if(Cluster[i] == 2){return(1)}
+  if(Cluster[i] == 3){return(2)}
+  if(Cluster[i] == 1){return(3)}
 }
-Class_pred = assign_class(Cluster)
+
+Cluster
 ```
 
-8. Error rate of the classification
+8. We calculate the accuracy of the classification and create a confusion matrix.
 ```{r error}
 # Error rate
 Class = wine$Class
-Error_rate = sum(Class == Class_pred)/178
-Error_rate
+accuracy = sum(Class != Cluster)/178
+print(accuracy)
 # Confusion matrix
-C_mat = table(m1@cluster, wine$Class)
+C_mat = table(Cluster, wine$Class)
 knitr::kable(C_mat, align = 'c', caption = 'confusion_matrix') 
 
 ```
