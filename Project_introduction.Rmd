@@ -1,0 +1,58 @@
+---
+title: "STATS 506 - Group Project, Group 7"
+author:
+  - "Songkai Xue, Runwei Wang, Lingke Ying"
+date: "November 27, 2018"
+output: html_document
+urlcolor: blue
+---
+
+## Introduction
+
+Our project topic is going to be **Finite Mixture Models**. Finite Mixture Models is a class of statistical models for addressing the heterogeneity of data and characterizing the unobserved class of each observations. It is well studied in the field of statistics, and has a wide range of applications in the fields of  biostatistics, bioinformatics, medical care and computer science.
+
+Particularly, this is a tutorial for **finite mixtures of regression models**. By studying the quick tutorial, you will get the essential techniques and outlines for doing clustering and classification using finite mixtures of regression models. With little modification, you are able to do the same analysis for your own practical project.
+
+## Dataset
+
+The data to be used is **Wine Data Set** (see [dataset web page](https://archive.ics.uci.edu/ml/datasets/wine), and [detailed description](https://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.names)). The dataset can be downloaded from [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/machine-learning-databases/wine/). The main task of data analysis is clustering, i.e. using chemical analysis to distinguish the origin of wines. The dataset has 178 observations and 14 variables, in which the origin of wines is a categorical variable and the others are continuous variables. Due to the layout of the dataset, it will be a nice and natural example for a finite mixtures of regression model with 3 underlying Gaussian distributions. Specifically, we will use variables `Class`, `Color_intensity` and `Total_phenols` for our tutorial.
+
+## Implements
+
+The languages to be used are **Stata (fmm)**, **R (mixtools)**, and **R (FlexMix)**, which will be the primary responsibilities of Songkai, Runwei, and Lingke, respectively. It's worth noting that `mixtools` is based on S3 classes and methods, and `FlexMix` is based on S4.
+
+## Model Description
+
+Let $y$, $\boldsymbol{x}$ be the response and predictors, respectively. If we know that the ground truth of number of clusters is 3, the finite mixtures of regression models can be given by:
+
+\begin{equation}
+    y | \boldsymbol{x} \sim \pi_1 N(\boldsymbol{\beta}_1^{\top}\boldsymbol{x}, \sigma_1^2) + \pi_2 N(\boldsymbol{\beta}_2^{\top}\boldsymbol{x}, \sigma_2^2) + \pi_3 N(\boldsymbol{\beta}_3^{\top}\boldsymbol{x}, \sigma_3^2),
+\end{equation}
+
+where $\pi_i, \boldsymbol{\beta}_i, \sigma_i^2$ ($i = 1, 2, 3$) are the parameters, and the model can be fitted by EM algorithm. 
+
+When it comes to clustering, one can compute the posterior probabilities ($\tilde\pi_1, \tilde\pi_2, \tilde\pi_3$) for a given observation ($\boldsymbol{x}, y$). Then the observation can be assigned to the cluster $k^*$ if
+
+\begin{equation}
+    k^* = argmax_{k\in \{1,2,3\}} \tilde{\pi}_k.
+\end{equation}
+
+Specifically, we choose `color intensity` to be the response, and `Total_phenols` to be the predictor.
+
+## References
+
+Main references of the project are listed below.
+
+Benaglia, T. et al. (2009). mixtools: An R Package for Analyzing Finite Mixture Models. _Journal of Statistical Software_, 32 (6), 1--29.
+
+Grun, B., and Leisch, F. (2008). Finite Mixtures of Generalized Linear Regression Models. In _Recent Advances in Linear Models and Related Areas_.  Heidelberg, German: Physica-Verlag HD.
+
+Leisch, F. (2004). FlexMix: A General Framework for Finite Mixture Models and Latent Class Regression in R. _Journal of Statistical Software_, 11 (8), 1--18.
+
+McLachlan, G., and Peel, D. (2000). _Finite Mixture Models_. New York, NY: John Wileys and Sons, Inc.
+
+StataCorp (2017). _Stata Finite Mixture Models Reference Manual: Release 15_. College Station, TX: StataCorp LLC.
+
+
+
+
