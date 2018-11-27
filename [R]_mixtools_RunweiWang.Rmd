@@ -1,0 +1,100 @@
+---
+title: "Group Work"
+author: "Runwei Wang"
+output: html_document
+---
+
+### Introduction and background information
+#### In this sectioin we will use package `mixtools` to fit finite mixtures of regression models. The mixtools package for R provides a set of functions for fitting a variety of finite mixture models. We are able to get posterior probabilities with the help of function `regmixEM` in this package. Also, package `caret` provides a convinient way to generate a confusion matrix based on final result, which gives demonstration of the performance of an algorithm.
+
+
+##### Preparation:
+```{r echo = TRUE, message = FALSE}
+library(mixtools)
+library(tidyverse)
+library(data.table)
+library(ggplot2)
+library(caret)
+```
+
+#### First we load data into R by using `fread`.
+```{r echo=TRUE, message=FALSE}
+wine = fread("https://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.data", header = F)
+```
+
+```{r echo=FALSE, message=FALSE}
+names(wine) = c("Class", "Alcohol", "Malic_acid", "Ash", "Alcalinity_of_ash", "Magnesium", "Total_phenols", "Flavanoids", "Nonflavanoid_phenols", "Proanthocyanins", "Color_intensity", "Hue", "OD280/OD315_of_diluted_wines", "Proline")
+pred = cbind(wine$Total_phenols, rep(1, 178))
+```
+
+#### Then we plot the density plot of response ¡°Color_intensity¡±, the density plot of predictor ¡°Total_phenols¡±, and the histogram of the ground truth class ¡°Class¡±.
+```{r echo=FALSE, message=FALSE}
+ggplot(wine, aes(x = Color_intensity)) + geom_density() + ggtitle("Density plot of response 'Color_intensity'") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r echo=FALSE, message=FALSE}
+ggplot(wine, aes(x = Total_phenols)) + geom_density() + ggtitle("Density plot of predictor 'Total_phenols'") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r echo=FALSE, message=FALSE}
+ggplot(wine, aes(x = Class)) + geom_histogram() + ggtitle("Histogram of the ground truth class 'Class'") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+#### Next we obtain our  fitted model by calling function "regmixEM". Here in order to keep consistent with results obtained in Stata, we set the initial values as shown below.
+```{r echo=TRUE, message=FALSE}
+winereg <- regmixEM(wine$Color_intensity, 
+                    pred, 
+                    lambda = c(0.3370787, 0.3314607, 0.3314607),
+                    beta = matrix(c(2.6478173, 2.3281364, 3.2570108, -3.3001476, 2.9323563, -4.4052074), nrow = 2, ncol = 3), 
+                    sigma = sqrt(c(5.3676108, .41571224, .92670911)), 
+                    addintercept = FALSE, 
+                    k = 3)
+```
+
+#### Results of model fitting are shown below.
+```{r echo=TRUE, message=TRUE}
+summary(winereg)
+```
+
+#### Next we compute the accuracy of classification.
+```{r echo=FALSE, message=FALSE}
+post = winereg$posterior
+final = data.frame()
+for (i in 1:178)
+{
+  final[i,1] = which.max(post[i,])
+}
+final[,2] = final[,1]-1
+final[,2][final[,2] == 0] = 3
+
+post1 = cbind(post, rep(0,178))
+for (i in 1:178)
+{
+  post1[i,4] = max(post[i,])
+}
+res = cbind(post1, final, wine$Class, rep(0,178))
+res[,8][res[,6] == res[,7]] = 1
+names(res) = c('C1', 'C2', 'C3', 'Max', 'Cluster', 'Class_pred', 'Class_true', 'match')
+a = group_by(res, Class_true) %>%
+  summarise(right_per = sum(match)/n())
+knitr::kable(a)
+```
+
+#### Then we generate an aggregation table: median of posterior probabilities, by ¡°Class¡±.
+```{r echo=TRUE, message=FALSE}
+med = group_by(res, Class_true) %>%
+  summarise(med1 = median(C1), 
+            med2 = median(C2), 
+            med3 = median(C3))
+knitr::kable(med)
+```
+
+#### Finally, we use function `confusionMatrix` to generate a confusion matrix.
+```{r echo=TRUE, message=FALSE}
+x = factor(res$Class_pred)
+y = factor(res$Class_true)
+z = confusionMatrix(x, y)
+z$table
+```
+
+#### Same as this in Stata, using same initial values helps working out same results. 
