@@ -1,0 +1,77 @@
+---
+title: "506_project_Flexmix"
+author: "Lingke Ying"
+date: "11/27/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+In this section we will use the package flexmix to fit finite mixtures of regression models. flexmix implements a general framework for fitting discrete mixtures of regression models in the R statistical computing environment. 
+
+1. General information
+```{r general, message = FALSE}
+library(flexmix)
+library(dplyr)
+# m1 - S4 object, use @ to retrieve the attributes
+```
+
+2. Download Wine dataset from the UCI Machine Learning Repository and save the dataset to the current working directory
+
+```{r dataset}
+wine <- read.delim("~/wine.txt", sep = ",")
+a = c("Class", "Alcohol", "Malic_acid", "Ash", "Alcalinity_of_ash", "Magnesium", 
+      "Total_phenols", "Flavanoids", "Nonflavanoid_phenols", "Proanthocyanins", 
+      "Color_intensity", "Hue", "OD280/OD315_of_diluted_wines", "Proline")
+names(wine) <- t(a)
+```
+
+3. Pattern of the selected variables (density plot of response “Color_intensity", predictor “Total_phenols", and histogram of the ground truth class “Class”)
+
+```{r pattern}
+# - density plot of response “Color_intensity”
+d_color <- density(wine$Color_intensity)
+plot(d_color, main="Density of Color_intensity")
+# - density plot of predictor “Total_phenols”
+d_phenol <- density(wine$Total_phenols)
+plot(d_phenol, main="Density of Total_phenols")
+# - histogram of the ground truth class “Class”
+h_class <- hist(wine$Class)
+```
+
+4. Set initial values for EM iterations
+
+5. Results of model fitting
+```{r results}
+m1 = flexmix(Color_intensity ~ Total_phenols, data = wine, k = 3)
+print(summary(m1))
+print(parameters(m1))
+```
+6. Clustering
+````{r cluster}
+Cluster = m1@cluster
+```
+
+7. Classification
+```{r classification, message = FALSE}
+post = m1@posterior$scaled
+assign_class = function(x){
+  if(x == 2){return(1)}
+  if(x == 3){return(2)}
+  if(x == 1){return(3)}
+}
+Class_pred = assign_class(Cluster)
+```
+
+8. Error rate of the classification
+```{r error}
+# Error rate
+Class = wine$Class
+Error_rate = sum(Class == Class_pred)/178
+Error_rate
+# Confusion matrix
+C_mat = table(m1@cluster, wine$Class)
+knitr::kable(C_mat, align = 'c', caption = 'confusion_matrix') 
+
+```
+
