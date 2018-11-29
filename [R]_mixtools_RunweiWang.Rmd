@@ -1,14 +1,20 @@
 ---
 title: "Group Work"
 author: "Runwei Wang"
+date: "November 27, 2018"
 output: html_document
 ---
+# Method {.tabset .tabset-fade .tabset-pills} 
 
-### Introduction and background information
-#### In this sectioin we will use package `mixtools` to fit finite mixtures of regression models. The mixtools package for R provides a set of functions for fitting a variety of finite mixture models. We are able to get posterior probabilities with the help of function `regmixEM` in this package. Also, package `caret` provides a convinient way to generate a confusion matrix based on final result, which gives demonstration of the performance of an algorithm.
+## R (mixtools) {.tabset .tabset-fade .tabset-pills} 
+
+### 0. General information 
+
+In this sectioin we will use package `mixtools` to fit finite mixtures of regression models. The mixtools package for R provides a set of functions for fitting a variety of finite mixture models. We are able to get posterior probabilities with the help of function `regmixEM` in this package. Also, package `caret` provides a convinient way to generate a confusion matrix based on final result, which gives demonstration of the performance of an algorithm.
 
 
-##### Preparation:
+### 1. Preparation
+We will use the packages shown below in the following analysis.
 ```{r echo = TRUE, message = FALSE}
 library(mixtools)
 library(tidyverse)
@@ -17,17 +23,20 @@ library(ggplot2)
 library(caret)
 ```
 
-#### First we load data into R by using `fread`.
+### 2. Save the dataset to the current working director
+First we load data into R from the website by using `fread`.
 ```{r echo=TRUE, message=FALSE}
 wine = fread("https://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.data", header = F)
 ```
 
-```{r echo=FALSE, message=FALSE}
+For convenience, we can change names for all variables.
+```{r echo=TRUE, message=FALSE}
 names(wine) = c("Class", "Alcohol", "Malic_acid", "Ash", "Alcalinity_of_ash", "Magnesium", "Total_phenols", "Flavanoids", "Nonflavanoid_phenols", "Proanthocyanins", "Color_intensity", "Hue", "OD280/OD315_of_diluted_wines", "Proline")
 pred = cbind(wine$Total_phenols, rep(1, 178))
 ```
 
-#### Then we plot the density plot of response ¡°Color_intensity¡±, the density plot of predictor ¡°Total_phenols¡±, and the histogram of the ground truth class ¡°Class¡±.
+### 3. Pattern of the selected variables
+Next we plot the density plot of response `Color_intensity`, the density plot of predictor `Total_phenols`, and the histogram of the ground truth class `Class` to see their pattern. As shown below, the distribution of `Color_intensity` is right-skewed, `Total_phenols` clearly has two peaks, and histogram represents the number of observations of class 1, 2, 3 respectively.
 ```{r echo=FALSE, message=FALSE}
 ggplot(wine, aes(x = Color_intensity)) + geom_density() + ggtitle("Density plot of response 'Color_intensity'") + theme(plot.title = element_text(hjust = 0.5))
 ```
@@ -40,7 +49,8 @@ ggplot(wine, aes(x = Total_phenols)) + geom_density() + ggtitle("Density plot of
 ggplot(wine, aes(x = Class)) + geom_histogram() + ggtitle("Histogram of the ground truth class 'Class'") + theme(plot.title = element_text(hjust = 0.5))
 ```
 
-#### Next we obtain our  fitted model by calling function "regmixEM". Here in order to keep consistent with results obtained in Stata, we set the initial values as shown below.
+### 4. Model fitting
+Next we obtain our  fitted model by calling function "regmixEM". Here in order to keep consistent with results obtained in Stata, we set the initial values as shown below.
 ```{r echo=TRUE, message=FALSE}
 winereg <- regmixEM(wine$Color_intensity, 
                     pred, 
@@ -51,12 +61,12 @@ winereg <- regmixEM(wine$Color_intensity,
                     k = 3)
 ```
 
-#### Results of model fitting are shown below.
+### 5. Results of model fitting are shown below.
 ```{r echo=TRUE, message=TRUE}
 summary(winereg)
 ```
 
-#### Next we compute the accuracy of classification.
+Next we compute the accuracy of classification.
 ```{r echo=FALSE, message=FALSE}
 post = winereg$posterior
 final = data.frame()
@@ -80,7 +90,7 @@ a = group_by(res, Class_true) %>%
 knitr::kable(a)
 ```
 
-#### Then we generate an aggregation table: median of posterior probabilities, by ¡°Class¡±.
+Then we generate an aggregation table: median of posterior probabilities, by â€œClassâ€.
 ```{r echo=TRUE, message=FALSE}
 med = group_by(res, Class_true) %>%
   summarise(med1 = median(C1), 
@@ -89,7 +99,7 @@ med = group_by(res, Class_true) %>%
 knitr::kable(med)
 ```
 
-#### Finally, we use function `confusionMatrix` to generate a confusion matrix.
+Finally, we use function `confusionMatrix` to generate a confusion matrix.
 ```{r echo=TRUE, message=FALSE}
 x = factor(res$Class_pred)
 y = factor(res$Class_true)
@@ -97,4 +107,4 @@ z = confusionMatrix(x, y)
 z$table
 ```
 
-#### Same as this in Stata, using same initial values helps working out same results. 
+Same as this in Stata, using same initial values helps working out same results. 
