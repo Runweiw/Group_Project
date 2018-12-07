@@ -7,7 +7,7 @@ Group 7\
 12/07/2018
 
 
-# Some Tips for Peer Reviewers 👻
+# Some tips for peer reviewers 👻
 
 Hi! This is the repo of Stats 506 group project, group 7. If you are going to review our draft version of the tutorial,
 you may need to read the following html documents:
