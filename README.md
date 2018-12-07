@@ -1,3 +1,12 @@
+# The final work has been completed 🥳
+
+Hi! This is the repo of Stats 506 group project, group 7. The final html document is "Group_Project.html". Please check it:)
+
+Best regards,\
+Group 7\
+12/07/2018
+
+
 # Some Tips for Peer Reviewers 👻
 
 Hi! This is the repo of Stats 506 group project, group 7. If you are going to review our draft version of the tutorial,
