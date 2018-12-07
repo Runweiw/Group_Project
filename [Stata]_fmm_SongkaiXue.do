@@ -38,7 +38,7 @@ kdensity Total_phenols
 
 * Ground truth of class (cluster): "Class"
 rename v1 Class
-histogram Class
+histogram Class, frequency
 
 
 *-----------------------------------------*

@@ -1,0 +1,273 @@
+---
+title: "Project_Group_7_Stata"
+author: "Songkai Xue"
+date: "November 27, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 0. General information
+
+Throughout the tutorial, we are using the computing environment of Stata version 15.0. `fmm` is a new command in Stata 15 for the model fitting of a variety of Finite Mixture Models (FMMs). Before the release of version 15.0, part of function of `fmm` could be found distributed in other commands. Thus, the latest updating gives us an integrated toolbox for a class of models in FMMs, which does us a lot of favor.
+
+```{stata, eval = FALSE}
+version 15.0
+clear
+```
+
+## 1. Download Wine dataset
+
+The Wine dataset is available at the UCI Machine Learning Repository. We can call command `import delimited` to download the `.csv` data file from the specific repo url and load it into Stata.
+
+```{stata, eval = FALSE}
+import delimited https://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.data
+```
+
+## 2. Save the dataset to the current working directory
+
+For future use, we can call `save` to save the loading dataset to the current working directory, as a `.dta` file.
+
+```{stata, eval = FALSE}
+save Wine, replace
+```
+
+## 3. Pattern of the selected variables
+
+The using variables in this tutorial are `Color_intensity`, `Total_phenols`, and `Class`, where `Color_intensity` and `Total_phenols` are continuous variables for our model fitting, and `Class` is a categorical variable which is the ground truth and should be unobserved. To get a first look into the pattern of selected variables, we can call `kdensity` to generate density plots of `Color_intensity` and `Total_phenols`, and call `histogram` to get histogram plot of `Class`. As illustrated below, the distribution of  `Color_intensity` is right-skewed, and the distribution of `Total_phenols` has two evident peaks. The histogram of `Class` shows slight differneces of the number of observations in each class, since we have 59, 71, and 48 observations for Class 1, 2, and 3, respectively.
+
+```{stata, eval = FALSE}
+rename v11 Color_intensity
+kdensity Color_intensity
+```
+
+<center>
+
+![**Figure 1**: Density plot of `Color_intensity`.](./Color_intensity.png){width=400px}
+
+</center>
+
+```{stata, eval = FALSE}
+rename v7 Total_phenols
+kdensity Total_phenols
+```
+
+<center>
+
+![**Figure 2**: Density plot of `Total_phenols`.](./Total_phenols.png){width=400px}
+
+</center>
+
+```{stata, eval = FALSE}
+rename v11 Color_intensity
+kdensity Color_intensity, frequency
+```
+
+<center>
+
+![**Figure 3**: Histogram of `Class`.](./Class.png){width=400px}
+
+</center>
+
+## 4. Set initial values for EM iterations
+
+The algorithm for fitting the mixtures of regression models is EM algorithm. In Stata, the default initial values for EM are computed by assigning each observation to an initial latent class that is determined by running a factor analysis on all the observed variables in the specified model. To see the setup of initial values, we can use option `emopts(iterate(0)) noestimate` when calling `fmm`. Then `e(b)` gives us the values of parameters at the 0-th iiteration, i.e., the starting values. 
+
+```{stata, eval = FALSE}
+fmm 3, emopts(iterate(0)) noestimate: regress Color_intensity Total_phenols
+matrix list e(b)
+```
+
+```{stata, eval = FALSE}
+e(b)[1,12]
+         1b.Class:       2.Class:       3.Class:   Color_int~y:   Color_int~y:   Color_int~y:   Color_int~y:
+                o.                                     1.Class#       2.Class#       3.Class#             1.
+            _cons          _cons          _cons   c.Total_ph~s   c.Total_ph~s   c.Total_ph~s          Class
+y1              0     -.01680712     -.01680712      2.6478173      3.2570108      2.9323563      2.3281364
+
+      Color_int~y:   Color_int~y:             /:             /:             /:
+                2.             3. var(e.Colo~y)  var(e.Colo~y)  var(e.Colo~y)
+            Class          Class        1.Class        2.Class        3.Class
+y1     -3.3001476     -4.4052074      5.3676108      .41571224      .92670911
+```
+
+If we want to give the own initial values, we can save the parameters matrix (a 1-by-12 matrix in the context) to a local variable, or so-called macro in Stata, change the elements of the matrix macro, and then pass it into the option of `fmm`.
+
+```{stata, eval = FALSE}
+matrix b = e(b)
+matrix b[1,2] = 0
+matrix b[1,3] = 0  // set the initial pi_1 = pi_2 = pi_3 = 1/3
+```
+
+## 5. Results of model fitting
+
+Here we comes to the model fitting part. Recalling that the matrix macro `b` is the previous defined starting values for the EM, the following syntax is going to fit a mixtures of regression model with 3 underlying subpopulation. It starts from initial values `b`, and stop if convergence or reaching maximal iteration steps, which is set to be 100.
+
+```{stata, eval = FALSE}
+fmm 3, from(b) emopts(iterate(100)): regress Color_intensity Total_phenols
+```
+
+We can call `estat lcprob` to retrieve the estimated cluster probabilities, `matrix list e(b)` to retrieve the estimated parameters, and `estate ic` to get the Akaike information criterion (AIC) of the fitted model.
+
+```{stata, eval = FALSE}
+estat lcprob      // pi_hat
+matrix list e(b)  // all estimated parameters
+estat ic          // AIC
+```
+
+```{stata, eval = FALSE}
+Latent class marginal probabilities             Number of obs     =        178
+
+--------------------------------------------------------------
+             |            Delta-method
+             |     Margin   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+       Class |
+          1  |   .4169933    .145375      .1813617    .6978102
+          2  |    .352397   .1421485      .1383178    .6484638
+          3  |   .2306097   .0510818      .1456486    .3451114
+--------------------------------------------------------------
+
+```
+
+```{stata, eval = FALSE}
+e(b)[1,12]
+         1b.Class:       2.Class:       3.Class:   Color_int~y:   Color_int~y:   Color_int~y:   Color_int~y:
+                o.                                     1.Class#       2.Class#       3.Class#             1.
+            _cons          _cons          _cons   c.Total_ph~s   c.Total_ph~s   c.Total_ph~s          Class
+y1              0     -.16831189     -.59234348     -.77858543      1.3262462      .38100321      8.3826582
+
+      Color_int~y:   Color_int~y:             /:             /:             /:
+                2.             3. var(e.Colo~y)  var(e.Colo~y)  var(e.Colo~y)
+            Class          Class        1.Class        2.Class        3.Class
+y1      1.5093148      1.7479029      5.3209232      .58695168      .21475632
+```
+
+```{stata, eval = FALSE}
+Akaike's information criterion and Bayesian information criterion
+
+-----------------------------------------------------------------------------
+       Model |        Obs  ll(null)  ll(model)      df         AIC        BIC
+-------------+---------------------------------------------------------------
+           . |        178         .  -372.4699      11    766.9398   801.9394
+-----------------------------------------------------------------------------
+               Note: N=Obs used in calculating BIC; see [R] BIC note.
+```
+
+## 6. Clustering
+
+To get the posterior probabilities of cluster, we can use command `predict`, with option `classposteriorpr`. Here we are going to show the posterior probabilities of first 10 observations, in the form of nicely formatted table.
+
+```{stata, eval = FALSE}
+predict pr*, classposteriorpr  // Posterior Probabilities: pr1, pr2, pr3
+format %4.3f pr*
+list Class pr* in 1/10
+```
+
+```{stata, eval = FALSE}
+     +-------------------------------+
+     | Class     pr1     pr2     pr3 |
+     |-------------------------------|
+  1. |     1   0.307   0.693   0.000 |
+  2. |     1   0.281   0.716   0.002 |
+  3. |     1   0.314   0.686   0.000 |
+  4. |     1   0.429   0.571   0.000 |
+  5. |     1   0.358   0.635   0.007 |
+     |-------------------------------|
+  6. |     1   0.422   0.578   0.000 |
+  7. |     1   0.287   0.713   0.000 |
+  8. |     1   0.252   0.748   0.000 |
+  9. |     1   0.263   0.737   0.000 |
+ 10. |     1   0.828   0.172   0.000 |
+     +-------------------------------+
+```
+
+For each observation, its cluster number is assigned by the column number where the maximum of posterior probabilities lies in. We generate a new variable `Cluster` to store the information of assigned cluster numbers. There are 50, 78, and 50 observations are assigned into Cluster 1, 2, and 3, respectively.
+
+```{stata, eval = FALSE}
+gen Cluster = 0
+replace Cluster = 1 if pr1 > pr2 & pr1 > pr3  // (50 real changes made)
+replace Cluster = 2 if pr2 > pr1 & pr2 > pr3  // (78 real changes made)
+replace Cluster = 3 if pr3 > pr1 & pr3 > pr2  // (50 real changes made)
+```
+
+## 7. Classification
+
+When coming to the task of classification, a primary question is how can we match a cluster with a class. We study the aggregation table of medians of posterior probabilities by `Class`, and found that a good match is Cluster 1, 2, and 3 with Class 3, 1, and 2, respectively.
+
+```{stata, eval = FALSE}
+preserve
+collapse (median)pr*, by(Class)
+list
+restore
+```
+
+```{stata, eval = FALSE}
+     +-------------------------------+
+     | Class     pr1     pr2     pr3 |
+     |-------------------------------|
+  1. |     1   0.305   0.681   0.000 |
+  2. |     2   0.108   0.136   0.740 |
+  3. |     3   1.000   0.000   0.000 |
+     +-------------------------------+
+```
+
+We can use command `recode` with option `gen(Class_pred)` to create a new variable `Class_pred` stands for the results of predicted class.
+
+```{stata, eval = FALSE}
+recode Cluster (2 = 1) (3 = 2) (1 = 3), gen(Class_pred)
+```
+
+
+## 8. Accuracy of the classification
+
+The accuracy of our fitted model is 0.764.
+
+```{stata, eval = FALSE}
+*** Accuracy ***
+gen True_pred = 0
+replace True_pred = 1 if Class == Class_pred
+
+preserve
+collapse (sum)True_pred
+local Accuracy = True_pred / 178
+restore
+
+display `Accuracy'  // Out: 0.764
+```
+
+```{stata, eval = FALSE}
+.76404494
+```
+
+To see the specific number of true and false classification within each class, we can check the confusion matrix (a 3-by-3 matrix in the context). The diagonal of the confusion matrix illustrates the correct cases of classification, and the off-diagonal of it shows the incorrect cases of classification.
+
+```{stata, eval = FALSE}
+*** Confusion matrix ***
+matrix C_mat = (0,0,0\0,0,0\0,0,0)
+
+local i = 0
+
+while `i' < _N {
+
+	local ++i
+	
+	local a = Class_pred[`i']
+	local b = Class[`i']
+	
+	matrix C_mat[`a', `b'] = C_mat[`a', `b'] + 1
+}
+
+matrix list C_mat
+```
+
+```{stata, eval = FALSE}
+    c1  c2  c3
+r1  49  20   9
+r2   2  48   0
+r3   8   3  39
+```
+
+
