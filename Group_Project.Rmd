@@ -1,0 +1,564 @@
+---
+title: "Clustering using Finite Mixture Models"
+author:
+  - "Group 7: Songkai Xue, Runwei Wang, Lingke Ying"
+date: "December 7, 2018"
+output: html_document
+urlcolor: blue
+---
+
+
+## Introduction
+
+Our project topic is going to be **Finite Mixture Models**. Finite Mixture Models is a class of statistical models for addressing the heterogeneity of data and characterizing the unobserved class of each observations. It is well studied in the field of statistics, and has a wide range of applications in the fields of  biostatistics, bioinformatics, medical care and computer science.
+
+Particularly, this is a tutorial for **finite mixtures of regression models**. By studying the quick tutorial, you will get the essential techniques and outlines for doing clustering and classification using finite mixtures of regression models. With little modification, you are able to do the same analysis for your own practical project.
+
+## Dataset
+
+The data to be used is **Wine Data Set** (see [dataset web page](https://archive.ics.uci.edu/ml/datasets/wine), and [detailed description](https://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.names)). The dataset can be downloaded from [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/machine-learning-databases/wine/). The main task of data analysis is clustering, i.e. using chemical analysis to distinguish the origin of wines. The dataset has 178 observations and 14 variables, in which the origin of wines is a categorical variable and the others are continuous variables. Due to the layout of the dataset, it will be a nice and natural example for a finite mixtures of regression model with 3 underlying Gaussian distributions. Specifically, we will use variables `Class`, `Color_intensity` and `Total_phenols` for our tutorial.
+
+## Model Description
+
+Let $y$, $\boldsymbol{x}$ be the response and predictors, respectively. If we know that the ground truth of number of clusters is 3, the finite mixtures of regression models can be given by:
+
+\begin{equation}
+    y | \boldsymbol{x} \sim \pi_1 N(\boldsymbol{\beta}_1^{\top}\boldsymbol{x}, \sigma_1^2) + \pi_2 N(\boldsymbol{\beta}_2^{\top}\boldsymbol{x}, \sigma_2^2) + \pi_3 N(\boldsymbol{\beta}_3^{\top}\boldsymbol{x}, \sigma_3^2),
+\end{equation}
+
+where $\pi_i, \boldsymbol{\beta}_i, \sigma_i^2$ ($i = 1, 2, 3$) are the parameters, and the model can be fitted by EM algorithm. 
+
+When it comes to clustering, one can compute the posterior probabilities ($\tilde\pi_1, \tilde\pi_2, \tilde\pi_3$) for a given observation ($\boldsymbol{x}, y$). Then the observation can be assigned to the cluster $k^*$ if
+\begin{equation}
+    k^* = argmax_{k\in \{1,2,3\}} \tilde{\pi}_k.
+\end{equation}
+
+Specifically, we choose `color intensity` to be the response, and `Total_phenols` to be the predictor.
+
+## Implements
+
+The languages to be used are **Stata (fmm)**, **R (mixtools)**, and **R (FlexMix)**, which will be the primary responsibilities of Songkai, Runwei, and Lingke, respectively. It's worth noting that `mixtools` is based on S3 classes and methods, and `FlexMix` is based on S4.
+
+
+
+## Examples {.tabset .tabset-fade .tabset-pills} 
+
+
+
+### Stata
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### 0. General information
+
+Throughout the tutorial, we are using the computing environment of Stata version 15.0. `fmm` is a new command in Stata 15 for the model fitting of a variety of Finite Mixture Models (FMMs). Before the release of version 15.0, part of function of `fmm` could be found distributed in other commands. Thus, the latest updating gives us an integrated toolbox for a class of models in FMMs, which does us a lot of favor.
+
+```{stata, eval = FALSE}
+version 15.0
+clear
+```
+
+#### 1. Download Wine dataset
+
+The Wine dataset is available at the UCI Machine Learning Repository. We can call command `import delimited` to download the `.csv` data file from the specific repo url and load it into Stata.
+
+```{stata, eval = FALSE}
+import delimited https://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.data
+```
+
+#### 2. Save the dataset to the current working directory
+
+For future use, we can call `save` to save the loading dataset to the current working directory, as a `.dta` file.
+
+```{stata, eval = FALSE}
+save Wine, replace
+```
+
+#### 3. Pattern of the selected variables
+
+The using variables in this tutorial are `Color_intensity`, `Total_phenols`, and `Class`, where `Color_intensity` and `Total_phenols` are continuous variables for our model fitting, and `Class` is a categorical variable which is the ground truth and should be unobserved. To get a first look into the pattern of selected variables, we can call `kdensity` to generate density plots of `Color_intensity` and `Total_phenols`, and call `histogram` to get histogram plot of `Class`. As illustrated below, the distribution of  `Color_intensity` is right-skewed, and the distribution of `Total_phenols` has two evident peaks. The histogram of `Class` shows slight differneces of the number of observations in each class, since we have 59, 71, and 48 observations for Class 1, 2, and 3, respectively.
+
+```{stata, eval = FALSE}
+rename v11 Color_intensity
+kdensity Color_intensity
+```
+
+<center>
+
+![**Figure 1**: Density plot of `Color_intensity`.](./Color_intensity.png){width=400px}
+
+</center>
+
+```{stata, eval = FALSE}
+rename v7 Total_phenols
+kdensity Total_phenols
+```
+
+<center>
+
+![**Figure 2**: Density plot of `Total_phenols`.](./Total_phenols.png){width=400px}
+
+</center>
+
+```{stata, eval = FALSE}
+rename v11 Color_intensity
+kdensity Color_intensity, frequency
+```
+
+<center>
+
+![**Figure 3**: Histogram of `Class`.](./Class.png){width=400px}
+
+</center>
+
+#### 4. Set initial values for EM iterations
+
+The algorithm for fitting the mixtures of regression models is EM algorithm. In Stata, the default initial values for EM are computed by assigning each observation to an initial latent class that is determined by running a factor analysis on all the observed variables in the specified model. To see the setup of initial values, we can use option `emopts(iterate(0)) noestimate` when calling `fmm`. Then `e(b)` gives us the values of parameters at the 0-th iiteration, i.e., the starting values. 
+
+```{stata, eval = FALSE}
+fmm 3, emopts(iterate(0)) noestimate: regress Color_intensity Total_phenols
+matrix list e(b)
+```
+
+```{stata, eval = FALSE}
+e(b)[1,12]
+         1b.Class:       2.Class:       3.Class:   Color_int~y:   Color_int~y:   Color_int~y:   Color_int~y:
+                o.                                     1.Class#       2.Class#       3.Class#             1.
+            _cons          _cons          _cons   c.Total_ph~s   c.Total_ph~s   c.Total_ph~s          Class
+y1              0     -.01680712     -.01680712      2.6478173      3.2570108      2.9323563      2.3281364
+
+      Color_int~y:   Color_int~y:             /:             /:             /:
+                2.             3. var(e.Colo~y)  var(e.Colo~y)  var(e.Colo~y)
+            Class          Class        1.Class        2.Class        3.Class
+y1     -3.3001476     -4.4052074      5.3676108      .41571224      .92670911
+```
+
+If we want to give the own initial values, we can save the parameters matrix (a 1-by-12 matrix in the context) to a local variable, or so-called macro in Stata, change the elements of the matrix macro, and then pass it into the option of `fmm`.
+
+```{stata, eval = FALSE}
+matrix b = e(b)
+matrix b[1,2] = 0
+matrix b[1,3] = 0  // set the initial pi_1 = pi_2 = pi_3 = 1/3
+```
+
+#### 5. Results of model fitting
+
+Here we comes to the model fitting part. Recalling that the matrix macro `b` is the previous defined starting values for the EM, the following syntax is going to fit a mixtures of regression model with 3 underlying subpopulation. It starts from initial values `b`, and stop if convergence or reaching maximal iteration steps, which is set to be 100.
+
+```{stata, eval = FALSE}
+fmm 3, from(b) emopts(iterate(100)): regress Color_intensity Total_phenols
+```
+
+We can call `estat lcprob` to retrieve the estimated cluster probabilities, `matrix list e(b)` to retrieve the estimated parameters, and `estate ic` to get the Akaike information criterion (AIC) of the fitted model.
+
+```{stata, eval = FALSE}
+estat lcprob      // pi_hat
+matrix list e(b)  // all estimated parameters
+estat ic          // AIC
+```
+
+```{stata, eval = FALSE}
+Latent class marginal probabilities             Number of obs     =        178
+
+--------------------------------------------------------------
+             |            Delta-method
+             |     Margin   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+       Class |
+          1  |   .4169933    .145375      .1813617    .6978102
+          2  |    .352397   .1421485      .1383178    .6484638
+          3  |   .2306097   .0510818      .1456486    .3451114
+--------------------------------------------------------------
+
+```
+
+```{stata, eval = FALSE}
+e(b)[1,12]
+         1b.Class:       2.Class:       3.Class:   Color_int~y:   Color_int~y:   Color_int~y:   Color_int~y:
+                o.                                     1.Class#       2.Class#       3.Class#             1.
+            _cons          _cons          _cons   c.Total_ph~s   c.Total_ph~s   c.Total_ph~s          Class
+y1              0     -.16831189     -.59234348     -.77858543      1.3262462      .38100321      8.3826582
+
+      Color_int~y:   Color_int~y:             /:             /:             /:
+                2.             3. var(e.Colo~y)  var(e.Colo~y)  var(e.Colo~y)
+            Class          Class        1.Class        2.Class        3.Class
+y1      1.5093148      1.7479029      5.3209232      .58695168      .21475632
+```
+
+```{stata, eval = FALSE}
+Akaike's information criterion and Bayesian information criterion
+
+-----------------------------------------------------------------------------
+       Model |        Obs  ll(null)  ll(model)      df         AIC        BIC
+-------------+---------------------------------------------------------------
+           . |        178         .  -372.4699      11    766.9398   801.9394
+-----------------------------------------------------------------------------
+               Note: N=Obs used in calculating BIC; see [R] BIC note.
+```
+
+#### 6. Clustering
+
+To get the posterior probabilities of cluster, we can use command `predict`, with option `classposteriorpr`. Here we are going to show the posterior probabilities of first 10 observations, in the form of nicely formatted table.
+
+```{stata, eval = FALSE}
+predict pr*, classposteriorpr  // Posterior Probabilities: pr1, pr2, pr3
+format %4.3f pr*
+list Class pr* in 1/10
+```
+
+```{stata, eval = FALSE}
+     +-------------------------------+
+     | Class     pr1     pr2     pr3 |
+     |-------------------------------|
+  1. |     1   0.307   0.693   0.000 |
+  2. |     1   0.281   0.716   0.002 |
+  3. |     1   0.314   0.686   0.000 |
+  4. |     1   0.429   0.571   0.000 |
+  5. |     1   0.358   0.635   0.007 |
+     |-------------------------------|
+  6. |     1   0.422   0.578   0.000 |
+  7. |     1   0.287   0.713   0.000 |
+  8. |     1   0.252   0.748   0.000 |
+  9. |     1   0.263   0.737   0.000 |
+ 10. |     1   0.828   0.172   0.000 |
+     +-------------------------------+
+```
+
+For each observation, its cluster number is assigned by the column number where the maximum of posterior probabilities lies in. We generate a new variable `Cluster` to store the information of assigned cluster numbers. There are 50, 78, and 50 observations are assigned into Cluster 1, 2, and 3, respectively.
+
+```{stata, eval = FALSE}
+gen Cluster = 0
+replace Cluster = 1 if pr1 > pr2 & pr1 > pr3  // (50 real changes made)
+replace Cluster = 2 if pr2 > pr1 & pr2 > pr3  // (78 real changes made)
+replace Cluster = 3 if pr3 > pr1 & pr3 > pr2  // (50 real changes made)
+```
+
+#### 7. Classification
+
+When coming to the task of classification, a primary question is how can we match a cluster with a class. We study the aggregation table of medians of posterior probabilities by `Class`, and found that a good match is Cluster 1, 2, and 3 with Class 3, 1, and 2, respectively.
+
+```{stata, eval = FALSE}
+preserve
+collapse (median)pr*, by(Class)
+list
+restore
+```
+
+```{stata, eval = FALSE}
+     +-------------------------------+
+     | Class     pr1     pr2     pr3 |
+     |-------------------------------|
+  1. |     1   0.305   0.681   0.000 |
+  2. |     2   0.108   0.136   0.740 |
+  3. |     3   1.000   0.000   0.000 |
+     +-------------------------------+
+```
+
+We can use command `recode` with option `gen(Class_pred)` to create a new variable `Class_pred` stands for the results of predicted class.
+
+```{stata, eval = FALSE}
+recode Cluster (2 = 1) (3 = 2) (1 = 3), gen(Class_pred)
+```
+
+
+#### 8. Accuracy of the classification
+
+The accuracy of our fitted model is 0.764.
+
+```{stata, eval = FALSE}
+*** Accuracy ***
+gen True_pred = 0
+replace True_pred = 1 if Class == Class_pred
+
+preserve
+collapse (sum)True_pred
+local Accuracy = True_pred / 178
+restore
+
+display `Accuracy'  // Out: 0.764
+```
+
+```{stata, eval = FALSE}
+.76404494
+```
+
+To see the specific number of true and false classification within each class, we can check the confusion matrix (a 3-by-3 matrix in the context). The diagonal of the confusion matrix illustrates the correct cases of classification, and the off-diagonal of it shows the incorrect cases of classification.
+
+```{stata, eval = FALSE}
+*** Confusion matrix ***
+matrix C_mat = (0,0,0\0,0,0\0,0,0)
+
+local i = 0
+
+while `i' < _N {
+
+	local ++i
+	
+	local a = Class_pred[`i']
+	local b = Class[`i']
+	
+	matrix C_mat[`a', `b'] = C_mat[`a', `b'] + 1
+}
+
+matrix list C_mat
+```
+
+```{stata, eval = FALSE}
+    c1  c2  c3
+r1  49  20   9
+r2   2  48   0
+r3   8   3  39
+```
+
+
+
+
+### R (mixtools)
+
+#### 0. General information 
+
+In this sectioin we will use package `mixtools` to fit finite mixtures of regression models. The mixtools package for R provides a set of functions for fitting a variety of finite mixture models. We are able to get posterior probabilities with the help of function `regmixEM` in this package. Also, package `caret` provides a convinient way to generate a confusion matrix based on final result, which gives demonstration of the performance of an algorithm.
+
+
+#### 1. Preparation
+We will use the packages shown below in the following analysis.
+```{r echo = TRUE, message = FALSE}
+library(mixtools)
+library(tidyverse)
+library(data.table)
+library(ggplot2)
+library(caret)
+```
+
+#### 2. Load the dataset into the R
+First we load data into R from the website by using `fread` from package `data.table`.
+```{r echo=TRUE, message=FALSE}
+wine = fread("https://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.data", header = F)
+```
+
+We change names for all variables for later use.
+```{r echo=TRUE, message=FALSE}
+names(wine) = c("Class", "Alcohol", "Malic_acid", "Ash", "Alcalinity_of_ash", "Magnesium", "Total_phenols", "Flavanoids", "Nonflavanoid_phenols", "Proanthocyanins", "Color_intensity", "Hue", "OD280/OD315_of_diluted_wines", "Proline")
+pred = cbind(wine$Total_phenols, rep(1, 178))
+```
+
+#### 3. Pattern of the selected variables
+Next we plot the density plot of response `Color_intensity`, the density plot of predictor `Total_phenols`, and the histogram of the ground truth class `Class` to see their patterns. As shown below, the distribution of `Color_intensity` is right-skewed, `Total_phenols` clearly has two peaks, and histogram represents the number of observations of class 1, 2, 3 respectively.
+```{r echo=FALSE, message=FALSE}
+ggplot(wine, aes(x = Color_intensity)) + geom_density() + ggtitle("Density plot of response 'Color_intensity'") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r echo=FALSE, message=FALSE}
+ggplot(wine, aes(x = Total_phenols)) + geom_density() + ggtitle("Density plot of predictor 'Total_phenols'") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r echo=FALSE, message=FALSE}
+ggplot(wine, aes(x = Class)) + geom_histogram() + ggtitle("Histogram of the ground truth class 'Class'") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+#### 4. Model fitting
+In R, we can obtain our fitted model by calling function "regmixEM" from package `mixtools`. Here in order to keep consistent with results obtained in Stata, we set the initial values as shown below.
+```{r echo=TRUE, message=FALSE}
+winereg <- regmixEM(wine$Color_intensity, 
+                    pred, 
+                    lambda = c(0.3370787, 0.3314607, 0.3314607),
+                    beta = matrix(c(2.6478173, 2.3281364, 3.2570108, -3.3001476, 2.9323563, -4.4052074), nrow = 2, ncol = 3), 
+                    sigma = sqrt(c(5.3676108, .41571224, .92670911)), 
+                    addintercept = FALSE, 
+                    k = 3)
+```
+
+#### 5. Results of model fitting
+The fitting result of our regression model is shown as below. Here can we get our parameters' estimators. 
+```{r echo=TRUE, message=TRUE}
+summary(winereg)
+```
+
+#### 6. Clustering
+The clustering number of each observation is decided by its column number with maximum posterior probabilities value. Here we show the first 6 rows of observations.
+```{r echo=TRUE, message=FALSE}
+post = winereg$posterior
+post = as.data.frame(post)
+names(post) = c('Class_1', 'Class_2', 'Class_3')
+knitr::kable(head(post), align = 'c', caption = 'Table 1: First 6 lines of posterior probabilities.')
+```
+
+
+#### 7. Classification
+Then we generate an aggregation table: median of posterior probabilities, by ??Class??.
+```{r echo=TRUE, message=FALSE}
+res = cbind(post, wine$Class)
+res = as.data.frame(res)
+names(res) = c('Class_1', 'Class_2', 'Class_3', 'Class_true')
+med = group_by(res, Class_true) %>%
+  summarise(med1 = median(Class_1), 
+            med2 = median(Class_2), 
+            med3 = median(Class_3))
+knitr::kable(med, align = 'c', caption = 'Table 2: Median of posterior probabilities, by ???Class???.')
+```
+
+Similar as results in Stata, we found that Cluster 1, 2, and 3 represent Class 3, 1, and 2, respectively. Here we compare its true class with classification number to get the accuracy of classification. 
+```{r echo=TRUE, message=FALSE}
+final = data.frame()
+for (i in 1:178)
+{
+  final[i,1] = which.max(post[i,])
+}
+final[,2] = final[,1]-1
+final[,2][final[,2] == 0] = 3
+
+post1 = cbind(post, rep(0,178))
+for (i in 1:178)
+{
+  post1[i,4] = max(post[i,])
+}
+post2 = as.data.frame(post1)
+res = cbind(post2, final, wine$Class, rep(0,178))
+res[,8][res[,6] == res[,7]] = 1
+names(res) = c('C1', 'C2', 'C3', 'Max', 'Cluster', 'Class_pred', 'Class_true', 'match')
+clustering = group_by(res, Class_true) %>%
+  summarise(Right_percentage = sum(match)/n())
+knitr::kable(clustering, align = 'c', caption = 'Table 3: Accuracy within each class.')
+```
+
+
+#### 8. Accuracy of the classification
+Finally, we use function `confusionMatrix` to generate a confusion matrix. Same as this in Stata, using same initial values helps working out same results. And we can see that the accuracy of our fitted model is 0.764.
+```{r echo=TRUE, message=FALSE}
+x = factor(res$Class_pred)
+y = factor(res$Class_true)
+z = confusionMatrix(x, y)
+z$table
+```
+
+
+
+
+### R (FlexMix)
+
+
+#### 0. General information
+
+In this tutorial, we will use the package `FlexMix` in R to fit finite mixtures of regression models. `FlexMix` implements a general framework for fitting discrete mixtures of regression models using the EM algorithm in the R statistical computing environment. We use it to complete a model-based clustering.
+```{r general, message = FALSE}
+library(stringr)
+library(flexmix)
+library(data.table)
+```
+
+#### 1. Download Wine data and save to the current working directory
+We first download Wine dataset from the UCI Machine Learning Repository and save the dataset to the current working directory in R. We use `read.delim` to read the `wine.txt` file, and assign names to each column.
+
+```{r dataset}
+wine = fread("https://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.data", header = F)
+a = c("Class", "Alcohol", "Malic_acid", "Ash", "Alcalinity_of_ash", "Magnesium", 
+      "Total_phenols", "Flavanoids", "Nonflavanoid_phenols", "Proanthocyanins", 
+      "Color_intensity", "Hue", "OD280/OD315_of_diluted_wines", "Proline")
+names(wine) = a
+```
+
+#### 2. Pattern of the selected variables
+
+Then we explore the patterns of variables. The using variables in this tutorial are `Color_intensity`, `Total_phenols`, and `Class`, where `Color_intensity` is the response and `Total_phenols` is the predictor in this model. To explore the patterns, we plot below the density plot of `Color_intensity`, the density plot of `Total_phenols`, and the histogram of the ground truth class `Class`.
+
+```{r pattern}
+# - density plot of response "Color_intensity"
+d_color = density(wine$Color_intensity)
+plot(d_color, main="Density of Color_intensity")
+# - density plot of predictor "Total_phenols"
+d_phenol = density(wine$Total_phenols)
+plot(d_phenol, main="Density of Total_phenols")
+# - histogram of the ground truth class "Class"
+h_class = hist(wine$Class)
+```
+
+We see from the graph that the distribution of `Color_intensity` is right-skewed, and the distribution of `Total_phenols` has two evident peaks. The histogram of `Class` shows obervations in each Class. We now have 59, 71, and 48 observations in Class 1, 2, and 3.
+
+
+#### 3. Set initial values for EM iterations
+
+We may want to set the initial values for EM iterations. In our Stata model, the initial values are setup by using `emopts(iterate(0)) noestimate` when calling fmm. 
+Below are the initial values of `lembda`, `beta`, and `sigma`.
+
+```{r init, message = FALSE}
+lambda = c(0.3370787, 0.3314607, 0.3314607)
+beta = matrix(c(2.6478173, 2.3281364, 3.2570108, -3.3001476, 2.9323563, -4.4052074), nrow = 2)
+sigma = sqrt(c(5.3676108, .41571224, .92670911))
+```
+
+```{r, message = FALSE}
+lambda
+beta
+sigma
+```
+
+However, the limit of the package `FlexMix` is that only the default initial value can be applied. Not being able to change the initial values of `lembda`, `beta` and `sigma`, we decide to keep them as default (for example, lambda = 1/3, 1/3, 1/3). Moreover, the default model we use in this package is `FLXMRglm()`, which is the main driver for `FlexMix` interfacing the glm family of models.
+
+#### 4. Results of model fitting
+Then we fitted the model on the data, with regression of `Color_intensity` on `Total_phenols`. Three kinds of Class in this model represent three underlying subpopulations. Here below are the model fitting results and the parameters.
+
+```{r echo = FALSE, message = FALSE}
+set.seed(155)  # Set seed for repeatable experiment
+```
+
+```{r results}
+m1 = flexmix(Color_intensity ~ Total_phenols, data = wine, k = 3)
+print(summary(m1))
+knitr::kable(parameters(m1), align = 'c', caption = 'Table 1: Parameters of the fitted model.')
+```
+
+#### 5. Clustering
+
+Here we get the posterior probabilities of cluster. We then generate a new variable `Cluster` to store the information of assigned cluster numbers. It's worth noting that `m1` is an `S4 object`, so we should use `@` to retrieve the attributes.
+
+```{r cluster}
+# m1 - S4 object, use @ to retrieve the attributes
+Cluster = m1@cluster
+post = cbind('Class' = wine$Class,
+             'pr1' = m1@posterior$scaled[,1],
+             'pr2' = m1@posterior$scaled[,2],
+             'pr3' = m1@posterior$scaled[,3])
+knitr::kable(head(post), align = 'c', caption = 'Table 2: First 6 lines of posterior probabilities.')
+
+cluster = table(Cluster)
+knitr::kable(cluster, align = 'c', caption = 'Table 3: Number of cases in each cluster.')
+```
+
+#### 6. Classification
+We study the aggregation table of medians of posterior probabilities by Class, and found that a good match is Cluster 1, 2, and 3 with Class 1, 2, and 3, correspondingly.
+
+```{r message = FALSE}
+# median of posterior probabilities, by "Class"
+dt = data.table(post)
+med = dt[, .(med1 = median(pr1), med2 = median(pr2), med3 = median(pr3)), Class]
+knitr::kable(med, align = 'c', caption = 'Table 4: Median of posterior probabilities, by "Class".')
+```
+
+#### 7. Accuracy of the classification
+We calculate the accuracy of the classification and create a confusion matrix. The accuracy of our fitted model is 0.719. From the confusion matrix, we can expore how well the the model fits. 
+```{r error}
+# Accuracy
+Class = wine$Class
+accuracy = sum(Class == Cluster)/178
+print(accuracy)
+
+# Confusion matrix
+C_mat = table(Cluster, Class)
+knitr::kable(C_mat, align = 'c', caption = 'Table 5: Confusion matrix of classification results.') 
+```
+
+## References
+
+Main references of the project are listed below.
+
+Benaglia, T. et al. (2009). mixtools: An R Package for Analyzing Finite Mixture Models. _Journal of Statistical Software_, 32 (6), 1--29.
+
+Grun, B., and Leisch, F. (2008). Finite Mixtures of Generalized Linear Regression Models. In _Recent Advances in Linear Models and Related Areas_.  Heidelberg, German: Physica-Verlag HD.
+
+Leisch, F. (2004). FlexMix: A General Framework for Finite Mixture Models and Latent Class Regression in R. _Journal of Statistical Software_, 11 (8), 1--18.
+
+McLachlan, G., and Peel, D. (2000). _Finite Mixture Models_. New York, NY: John Wileys and Sons, Inc.
+
+StataCorp (2017). _Stata Finite Mixture Models Reference Manual: Release 15_. College Station, TX: StataCorp LLC.
